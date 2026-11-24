@@ -65,7 +65,7 @@ preflight() {
     command_exists systemctl || die "Commande requise absente: systemctl"
 
     state_put_host "$distro" "$version" "$arch" "${PRETTY_NAME:-$distro}"
-    state_update '.steps.os_support = {status:"succeeded", completion_type:"automatic_detection", distribution:$distro, version:$version, architecture:$arch, detected_at:$now} | .steps.iso_verification = {status:"not_applicable", reason:"Le protocole est exécuté sur un système déjà installé; le média ISO n'est pas présent sur le serveur."}' \
+    state_update '.steps.os_support = {status:"succeeded", completion_type:"automatic_detection", distribution:$distro, version:$version, architecture:$arch, detected_at:$now} | .steps.iso_verification = {status:"not_applicable", reason:"Le système est déjà installé; le média ISO est absent du serveur."}' \
         --arg distro "$distro" --arg version "$version" --arg arch "$arch"
     log "Système détecté: ${PRETTY_NAME:-$distro} ($arch)"
     log "Préflight non invasif réussi."
