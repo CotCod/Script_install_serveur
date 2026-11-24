@@ -3,7 +3,6 @@
 record_manual_step() {
     local step=$1 label confirmation evidence required_step
     case "$step" in
-        iso_verification) label="Vérification de provenance et checksum ISO (chapitre 3)" ;;
         os_support) label="Validation de la distribution, version LTS/Stable et adéquation à la demande (chapitres 2 à 4)" ;;
         base_reboot) label="Redémarrage requis après mise à jour initiale (chapitre 4)" ;;
         services_review) label="Revue des services actifs et désactivation des services inutiles (chapitre 4)" ;;
@@ -22,10 +21,6 @@ record_manual_step() {
     esac
 
     case "$step" in
-        iso_verification)
-            [[ "$(jq -r '.steps.iso_verification.status // "not_started"' "$STATE_FILE")" != failed ]] \
-                || die "Une vérification SHA-256 a échoué; cette non-conformité critique ne peut pas être annulée par une attestation."
-            ;;
         os_support)
             [[ -n "$(jq -r '.host.distribution // empty' "$STATE_FILE")" && -n "$(jq -r '.host.version // empty' "$STATE_FILE")" ]] \
                 || die "L'inventaire du système est absent."

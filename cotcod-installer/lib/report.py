@@ -99,7 +99,7 @@ def flatten(value, prefix=""):
 
 
 def make_pdf(state, destination):
-    required = ("os_support", "iso_verification", "base_installation", "services_review", "storage", "network", "users", "ssh_key_test", "ssh_password_test", "ssh", "mfa",
+    required = ("os_support", "base_installation", "services_review", "storage", "network", "users", "ssh_key_test", "ssh_password_test", "ssh", "mfa",
                 "firewall", "external_scan", "fail2ban", "sysctl", "apparmor", "reboot_validation", "final_audit")
     steps = state.get("steps", {})
     missing = [name for name in required if steps.get(name, {}).get("status") != "succeeded"]

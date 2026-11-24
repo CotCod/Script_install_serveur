@@ -256,30 +256,3 @@ EOF
     state_update '.report.network.timezone = "Europe/Paris" | .report.network.timesyncd = "enabled"'
     log "Configuration réseau statique appliquée et confirmée. Lancez --inspect-network puis validez le contrôle avec --record-manual network."
 }
-
-verify_installation_iso() {
-    local session_id=$1 iso_path expected_hash source_url actual_hash
-    state_require_confirmed preparation
-    require_command sha256sum
-    while :; do
-        read -r -p "Chemin de l'image ISO à vérifier : " iso_path || die "Lecture interrompue."
-        [[ -f "$iso_path" && -r "$iso_path" ]] && break
-        warn "Fichier ISO introuvable ou illisible; vérifiez le chemin."
-    done
-    while :; do
-        prompt_value expected_hash "SHA-256 officiel publié par l'éditeur : "
-        expected_hash=${expected_hash,,}
-        [[ "$expected_hash" =~ ^[0-9a-f]{64}$ ]] && break
-        warn "Le SHA-256 doit contenir exactement 64 caractères hexadécimaux."
-    done
-    prompt_value source_url "Source officielle de téléchargement : "
-    actual_hash=$(sha256sum -- "$iso_path" | awk '{print $1}')
-    if [[ "$actual_hash" != "$expected_hash" ]]; then
-        state_update '.steps.iso_verification = {status:"failed", expected_sha256:$expected, actual_sha256:$actual, source:$source, verified_at:$now} | .non_conformities += [{severity:"critical", step:"iso_verification", description:"Le SHA-256 de l’ISO ne correspond pas à la valeur officielle."}]' \
-            --arg expected "$expected_hash" --arg actual "$actual_hash" --arg source "$source_url"
-        die "SHA-256 invalide : l'image ne doit pas être utilisée."
-    fi
-    state_update '.steps.iso_verification = {status:"succeeded", image:$image, sha256:$actual, source:$source, verified_at:$now} | .report.system.iso = {image:$image, sha256:$actual, source:$source, verified_at:$now}' \
-        --arg image "$iso_path" --arg actual "$actual_hash" --arg source "$source_url"
-    log "Image ISO vérifiée; SHA-256 conforme."
-}

@@ -11,7 +11,7 @@ audit_final() {
     local -a admins
     local step
 
-    for step in os_support iso_verification base_installation services_review storage network users ssh_key_test ssh_password_test ssh mfa firewall external_scan fail2ban sysctl apparmor reboot_validation; do
+    for step in os_support base_installation services_review storage network users ssh_key_test ssh_password_test ssh mfa firewall external_scan fail2ban sysctl apparmor reboot_validation; do
         if [[ "$(jq -r --arg step "$step" '.steps[$step].status // "not_started"' "$STATE_FILE")" != succeeded ]]; then
             failures+=("Étape non validée : $step")
         fi
