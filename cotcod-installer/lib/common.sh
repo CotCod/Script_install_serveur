@@ -19,6 +19,34 @@ validate_state_dir() {
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
+set_system_path() {
+    local dir
+    for dir in /usr/local/sbin /usr/sbin /sbin; do
+        case ":${PATH:-}:" in
+            *":$dir:"*) ;;
+            *) PATH="$dir${PATH:+:$PATH}" ;;
+        esac
+    done
+    export PATH
+}
+
+confirm_yes_no() {
+    local prompt=$1 answer
+    while :; do
+        if [[ -r /dev/tty && -w /dev/tty ]]; then
+            printf '%s [Y/n] ' "$prompt" > /dev/tty
+            IFS= read -r answer < /dev/tty || return 2
+        else
+            read -r -p "$prompt [Y/n] " answer || return 2
+        fi
+        case "${answer,,}" in
+            ""|y|yes) return 0 ;;
+            n|no) return 1 ;;
+            *) warn "Répondez par Y (yes) ou n (no)." ;;
+        esac
+    done
+}
+
 dependency_package_for() {
     case "$1" in
         apt|apt-get) printf apt ;;
@@ -57,14 +85,10 @@ dependency_package_for() {
 
 install_dependency_packages() {
     local -a packages=("$@")
-    local confirmation
     ((${#packages[@]})) || return 0
 
-    [[ -r /dev/tty && -w /dev/tty ]] \
-        || die "Des dépendances manquent (${packages[*]}). Relancez depuis un terminal interactif pour autoriser leur installation."
-    printf 'Dépendances manquantes : %s\nElles seront installées maintenant avant le parcours CotCod.\nTapez INSTALLER-DEPENDANCES pour continuer : ' "${packages[*]}" > /dev/tty
-    IFS= read -r confirmation < /dev/tty || die "Confirmation non reçue; aucune dépendance n'a été installée."
-    [[ "$confirmation" == INSTALLER-DEPENDANCES ]] \
+    printf 'Dépendances manquantes : %s\n' "${packages[*]}"
+    confirm_yes_no "Les installer maintenant avant de commencer le parcours ?" \
         || die "Installation des dépendances annulée; le parcours n'a pas commencé."
 
     log "Actualisation des index APT avant l'installation des dépendances."

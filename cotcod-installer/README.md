@@ -30,8 +30,8 @@ sudo ./cotcod-installer.sh --new-session
 
 Au démarrage, l’assistant vérifie les commandes requises pour l’ensemble du
 parcours. S’il en manque, il regroupe leurs paquets APT et les installe avant
-de commencer, après une confirmation unique `INSTALLER-DEPENDANCES`. Il choisit
-les paquets réseau selon la distribution détectée.
+de commencer, après une confirmation `[Y/n]` (Entrée accepte l’installation).
+Il choisit les paquets réseau selon la distribution détectée.
 
 Les autres actions système restent précédées de leurs confirmations propres.
 L’assistant ne redémarre jamais la machine de lui-même. Un accès console doit

@@ -72,9 +72,8 @@ collect_preparation() {
     state_put_preparation "$client" "$hostname" "$ip" "$role" "$criticality" "$admins"
     log "Préparation enregistrée pour $hostname."
     state_show_preparation
-    local confirmation
-    read -r -p "Vérifiez ces informations. Tapez CONFIRMER pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == CONFIRMER ]] || die "Préparation non confirmée; aucune action système effectuée."
+    confirm_yes_no "Vérifiez ces informations et continuer ?" \
+        || die "Préparation non confirmée; aucune action système effectuée."
     state_confirm_preparation
 }
 
@@ -100,9 +99,8 @@ run_installation_workflow() {
         collect_preparation "$session_id"
     elif [[ "$(jq -r '.steps.preparation.confirmed // false' "$STATE_FILE")" != true ]]; then
         state_show_preparation
-        local confirmation
-        read -r -p "Tapez CONFIRMER pour valider ces informations : " confirmation || die "Lecture interrompue."
-        [[ "$confirmation" == CONFIRMER ]] || die "Préparation non confirmée."
+        confirm_yes_no "Valider ces informations et continuer ?" \
+            || die "Préparation non confirmée."
         state_confirm_preparation
     fi
     state_require_confirmed preparation

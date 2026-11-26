@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 record_manual_step() {
-    local step=$1 label confirmation evidence required_step
+    local step=$1 label evidence required_step
     case "$step" in
         os_support) label="Validation de la distribution, version LTS/Stable et adéquation à la demande (chapitres 2 à 4)" ;;
         base_reboot) label="Redémarrage requis après mise à jour initiale (chapitre 4)" ;;
@@ -110,9 +110,8 @@ record_manual_step() {
 
     printf 'Étape manuelle à valider : %s\n' "$label"
     printf 'Ne confirmez qu’après avoir réalisé et vérifié ce contrôle.\n'
-    read -r -p "Tapez CONFIRMER pour consigner sa réussite : " confirmation \
-        || die "Lecture interrompue."
-    [[ "$confirmation" == CONFIRMER ]] || die "Validation annulée."
+    confirm_yes_no "Consigner la réussite de ce contrôle ?" \
+        || die "Validation annulée."
     prompt_text evidence "Note ou référence de preuve (sans secret) : "
     state_record_manual_step "$step" "$evidence"
     log "Étape manuelle '$step' consignée comme validée par le technicien."

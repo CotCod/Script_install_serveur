@@ -90,6 +90,7 @@ main() {
         [[ -n "$session_id" ]] || die "--session est requis pour cette action."
     fi
 
+    set_system_path
     require_root
     validate_supported_platform
     ensure_required_commands
@@ -134,9 +135,8 @@ main() {
             return 0
         fi
         [[ "$(jq -r '.steps.preparation.confirmed // false' "$STATE_FILE")" == false ]] || die "La préparation est déjà confirmée."
-        local confirmation
-        read -r -p "Tapez CONFIRMER après revue des informations : " confirmation || die "Lecture interrompue."
-        [[ "$confirmation" == CONFIRMER ]] || die "Confirmation annulée; aucune modification effectuée."
+        confirm_yes_no "Confirmer la préparation après revue des informations ?" \
+            || die "Confirmation annulée; aucune modification effectuée."
         state_confirm_preparation
         log "Préparation confirmée et enregistrée. Aucune modification système n'a été effectuée."
         return 0
