@@ -28,9 +28,14 @@ commencer volontairement une nouvelle session, utilisez :
 sudo ./cotcod-installer.sh --new-session
 ```
 
-Les actions système restent précédées de confirmations explicites. L’assistant
-ne redémarre jamais la machine de lui-même. Un accès console doit rester
-disponible pendant les changements réseau et SSH.
+Au démarrage, l’assistant vérifie les commandes requises pour l’ensemble du
+parcours. S’il en manque, il regroupe leurs paquets APT et les installe avant
+de commencer, après une confirmation unique `INSTALLER-DEPENDANCES`. Il choisit
+les paquets réseau selon la distribution détectée.
+
+Les autres actions système restent précédées de leurs confirmations propres.
+L’assistant ne redémarre jamais la machine de lui-même. Un accès console doit
+rester disponible pendant les changements réseau et SSH.
 
 ## Parcours automatisé
 
@@ -71,9 +76,8 @@ fournir l’identifiant de session avec `--session ID`.
 sudo ./cotcod-installer.sh --help
 ```
 
-Si `jq` manque, l’installateur demande confirmation avant d’actualiser les
-index APT et de l’installer. Les mots de passe, secrets TOTP et codes de
-récupération ne sont pas enregistrés dans l’état JSON.
+Les mots de passe, secrets TOTP et codes de récupération ne sont pas
+enregistrés dans l’état JSON.
 
 La syntaxe Bash et Python a été vérifiée statiquement. L’exécution complète et
 la génération réelle du PDF doivent être validées sur le serveur de test avant

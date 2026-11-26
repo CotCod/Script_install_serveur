@@ -18,25 +18,113 @@ validate_state_dir() {
 }
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
-require_command() { command_exists "$1" || die "Commande requise absente: $1"; }
 
-ensure_jq() {
-    command_exists jq && return 0
+dependency_package_for() {
+    case "$1" in
+        apt|apt-get) printf apt ;;
+        jq) printf jq ;;
+        awk) printf mawk ;;
+        bash) printf bash ;;
+        blkid|findmnt|lsblk|runuser) printf util-linux ;;
+        chage|passwd|useradd|usermod|chpasswd) printf passwd ;;
+        chmod|chown|cp|cut|date|df|dirname|head|install|mktemp|mv|nproc|numfmt|paste|shuf|stat|timeout|uname) printf coreutils ;;
+        dpkg|dpkg-query) printf dpkg ;;
+        fail2ban-client) printf fail2ban ;;
+        find) printf findutils ;;
+        free|sysctl) printf procps ;;
+        getent|iconv|locale) printf libc-bin ;;
+        google-authenticator) printf libpam-google-authenticator ;;
+        grep) printf grep ;;
+        hostname) printf hostname ;;
+        hostnamectl|journalctl|localectl|systemctl|systemd-run|timedatectl) printf systemd ;;
+        id) printf coreutils ;;
+        ifdown|ifup) printf ifupdown ;;
+        ip|ss) printf iproute2 ;;
+        locale-gen|update-locale) printf locales ;;
+        netplan) printf netplan.io ;;
+        python3) printf python3 ;;
+        resolvconf) printf resolvconf ;;
+        sed) printf sed ;;
+        ssh-keygen) printf openssh-client ;;
+        sshd) printf openssh-server ;;
+        sudo|visudo) printf sudo ;;
+        tar) printf tar ;;
+        ufw) printf ufw ;;
+        aa-enforce|aa-status) printf apparmor-utils ;;
+        *) return 1 ;;
+    esac
+}
 
-    command_exists apt-get || die "jq est absent et apt-get n'est pas disponible pour l'installer."
-    [[ -r /dev/tty && -w /dev/tty ]] || die "jq est absent. Relancez depuis un terminal interactif pour confirmer son installation."
-
-    printf 'jq est requis pour gérer l’état JSON. Le script peut actualiser les index APT puis installer jq.\nTapez CONFIRMER pour continuer : ' > /dev/tty
+install_dependency_packages() {
+    local -a packages=("$@")
     local confirmation
-    IFS= read -r confirmation < /dev/tty || die "Confirmation non reçue; jq n'a pas été installé."
-    [[ "$confirmation" == CONFIRMER ]] || die "Installation de jq annulée; aucune installation n'a été lancée."
+    ((${#packages[@]})) || return 0
 
-    log "Actualisation des index APT (confirmation reçue)."
-    apt-get update || die "Échec de l'actualisation APT; jq n'a pas été installé."
-    log "Installation de jq (confirmation reçue)."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq \
-        || die "Échec de l'installation de jq."
-    command_exists jq || die "L'installation s'est terminée, mais jq reste introuvable dans PATH."
+    [[ -r /dev/tty && -w /dev/tty ]] \
+        || die "Des dépendances manquent (${packages[*]}). Relancez depuis un terminal interactif pour autoriser leur installation."
+    printf 'Dépendances manquantes : %s\nElles seront installées maintenant avant le parcours CotCod.\nTapez INSTALLER-DEPENDANCES pour continuer : ' "${packages[*]}" > /dev/tty
+    IFS= read -r confirmation < /dev/tty || die "Confirmation non reçue; aucune dépendance n'a été installée."
+    [[ "$confirmation" == INSTALLER-DEPENDANCES ]] \
+        || die "Installation des dépendances annulée; le parcours n'a pas commencé."
+
+    log "Actualisation des index APT avant l'installation des dépendances."
+    apt-get update || die "Échec d'apt-get update; les dépendances n'ont pas été installées."
+    log "Installation groupée des dépendances : ${packages[*]}"
+    apt-get install -y --no-install-recommends "${packages[@]}" \
+        || die "Échec de l'installation groupée des dépendances."
+}
+
+ensure_required_commands() {
+    local distro command package
+    local -a required_commands missing_packages=()
+    declare -A package_seen=()
+
+    command_exists apt-get || die "apt-get est absent; impossible d'installer automatiquement les dépendances."
+    command_exists dpkg || die "dpkg est absent; impossible de déterminer l'architecture Debian/Ubuntu."
+    source /etc/os-release
+    distro=${ID:-unknown}
+    required_commands=(
+        apt apt-get awk bash blkid chage chmod chown cp cut date df dirname dpkg dpkg-query
+        fail2ban-client find findmnt free getent google-authenticator grep head hostname
+        hostnamectl iconv id install ip jq journalctl locale locale-gen localectl lsblk mktemp
+        mv nproc numfmt passwd paste python3 runuser sed shuf ss sshd ssh-keygen stat sudo
+        sysctl systemctl systemd-run tar timedatectl timeout ufw uname update-locale useradd
+        usermod chpasswd visudo aa-enforce aa-status
+    )
+    case "$distro" in
+        debian) required_commands+=(ifdown ifup resolvconf) ;;
+        ubuntu) required_commands+=(netplan) ;;
+    esac
+
+    for command in "${required_commands[@]}"; do
+        command_exists "$command" && continue
+        package=$(dependency_package_for "$command") \
+            || die "Aucun paquet Debian/Ubuntu connu pour la commande requise absente : $command"
+        [[ -n "${package_seen[$package]:-}" ]] && continue
+        package_seen[$package]=1
+        missing_packages+=("$package")
+    done
+
+    if ((${#missing_packages[@]})); then
+        install_dependency_packages "${missing_packages[@]}"
+    fi
+
+    for command in "${required_commands[@]}"; do
+        command_exists "$command" \
+            || die "La commande requise '$command' reste absente après l'installation de ses dépendances."
+    done
+    log "Toutes les commandes requises sont disponibles avant le début du parcours."
+}
+
+require_command() {
+    local command=$1 package
+    command_exists "$command" && return 0
+    package=$(dependency_package_for "$command") \
+        || die "Commande requise absente et paquet non identifié : $command"
+    warn "La commande '$command' manque malgré le contrôle initial; installation de '$package'."
+    install_dependency_packages "$package"
+    command_exists "$command" \
+        || die "La commande requise '$command' reste absente après l'installation de '$package'."
 }
 
 preflight() {
@@ -85,8 +173,8 @@ validate_supported_platform() {
         amd64|arm64|x86_64|aarch64) ;;
         *) die "Architecture non supportée: $arch" ;;
     esac
-    command_exists apt || die "Commande requise absente: apt"
-    command_exists systemctl || die "Commande requise absente: systemctl"
+    command_exists apt-get || die "Commande requise absente: apt-get (requise pour installer les dépendances)."
+    command_exists dpkg || die "Commande requise absente: dpkg (requise pour déterminer l'architecture)."
 }
 
 valid_ipv4() {

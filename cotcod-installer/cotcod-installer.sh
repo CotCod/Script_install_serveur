@@ -92,7 +92,7 @@ main() {
 
     require_root
     validate_supported_platform
-    ensure_jq
+    ensure_required_commands
     validate_state_dir "$state_dir"
     STATE_DIR=$state_dir
     export STATE_DIR
