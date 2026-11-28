@@ -33,12 +33,7 @@ set_system_path() {
 confirm_yes_no() {
     local prompt=$1 answer
     while :; do
-        if [[ -r /dev/tty && -w /dev/tty ]]; then
-            printf '%s [Y/n] ' "$prompt" > /dev/tty
-            IFS= read -r answer < /dev/tty || return 2
-        else
-            read -r -p "$prompt [Y/n] " answer || return 2
-        fi
+        read -r -p "$prompt [Y/n] " answer || return 2
         case "${answer,,}" in
             ""|y|yes) return 0 ;;
             n|no) return 1 ;;

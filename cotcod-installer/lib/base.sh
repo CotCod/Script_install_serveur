@@ -1,5 +1,36 @@
 #!/usr/bin/env bash
 
+ensure_hostname_hosts_entry() {
+    local hostname=$1 tmp
+    tmp=$(mktemp /etc/.hosts.cotcod.XXXXXX) || die "Impossible de préparer /etc/hosts."
+    awk -v hostname="$hostname" '
+        BEGIN { found=0 }
+        $1 == "127.0.1.1" {
+            found=1
+            has_hostname=0
+            line=$1
+            comment=""
+            for (i=2; i<=NF; i++) {
+                if ($i ~ /^#/) {
+                    for (; i<=NF; i++) comment=comment (comment == "" ? "" : " ") $i
+                    break
+                }
+                line=line " " $i
+                if ($i == hostname) has_hostname=1
+            }
+            if (!has_hostname) line=line " " hostname
+            if (comment != "") line=line " " comment
+            print line
+            next
+        }
+        { print }
+        END { if (!found) print "127.0.1.1 " hostname }
+    ' /etc/hosts > "$tmp" || { rm -f -- "$tmp"; die "Impossible de mettre à jour /etc/hosts."; }
+    chmod --reference=/etc/hosts "$tmp"
+    chown root:root "$tmp"
+    mv -f -- "$tmp" /etc/hosts || die "Impossible d'installer la nouvelle configuration /etc/hosts."
+}
+
 base_prepare() {
     local hostname os kernel upgradable reboot_required package status services
     local -a packages missing
@@ -40,11 +71,11 @@ base_prepare() {
 }
 
 base_apply() {
-    local session_id=$1 confirmation target_hostname current_hostname boot_id
+    local session_id=$1 target_hostname current_hostname boot_id base_status selections_backup
     local -a packages
     state_require_confirmed preparation
     [[ "$(jq -r '.steps.os_support.status // "not_started"' "$STATE_FILE")" == succeeded ]] \
-        || die "Consignez d'abord la validation technique de la distribution et de sa version avec --record-manual os_support."
+        || die "La détection automatique de la distribution manque; relancez le préflight avant l'application."
     require_command apt-get
     require_command dpkg
     require_command hostnamectl
@@ -52,20 +83,26 @@ base_apply() {
     require_command update-locale
     require_command localectl
     require_command timedatectl
-    jq -e '.steps.base_installation.status == "prepared"' "$STATE_FILE" >/dev/null \
+    base_status=$(jq -r '.steps.base_installation.status // "not_started"' "$STATE_FILE")
+    [[ "$base_status" == prepared || "$base_status" == in_progress ]] \
         || die "Le plan d'installation initial doit être préparé avant son application."
 
     state_show_preparation
     printf '\nCette étape mettra à jour le système et installera les outils CotCod. Une sauvegarde de /etc sera créée.\n'
-    read -r -p "Tapez APPLIQUER-BASE pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == APPLIQUER-BASE ]] || die "Application annulée; aucune modification système n'a été lancée."
+    confirm_yes_no "Appliquer maintenant les mises à jour et la configuration de base ?" \
+        || die "Application annulée; aucune modification système n'a été lancée."
 
     local backup_dir="$STATE_DIR/backups/$session_id"
     mkdir -p -- "$backup_dir"
     chmod 700 -- "$STATE_DIR/backups" "$backup_dir"
     backup_file /etc "$backup_dir"
-    dpkg --get-selections > "$backup_dir/dpkg-selections-before.txt"
-    chmod 600 -- "$backup_dir/dpkg-selections-before.txt"
+    selections_backup="$backup_dir/dpkg-selections-before.txt"
+    if [[ -e "$selections_backup" ]]; then
+        selections_backup=$(mktemp "$backup_dir/dpkg-selections-retry.XXXXXX") \
+            || die "Impossible de préparer la sauvegarde des sélections dpkg."
+    fi
+    dpkg --get-selections > "$selections_backup"
+    chmod 600 -- "$selections_backup"
 
     target_hostname=$(jq -r '.preparation.hostname' "$STATE_FILE")
     current_hostname=$(hostnamectl --static 2>/dev/null || hostname)
@@ -104,12 +141,14 @@ base_apply() {
     if [[ "$current_hostname" != "$target_hostname" ]]; then
         hostnamectl set-hostname "$target_hostname" || { state_set_status base_system_configuration failed; die "Impossible de définir le hostname CotCod."; }
     fi
+    ensure_hostname_hosts_entry "$target_hostname"
     if ! grep -qE '^[[:space:]]*fr_FR.UTF-8[[:space:]]+UTF-8([[:space:]]|$)' /etc/locale.gen; then
         printf '\nfr_FR.UTF-8 UTF-8\n' >> /etc/locale.gen
     fi
     locale-gen fr_FR.UTF-8 || { state_set_status base_system_configuration failed; die "La génération de fr_FR.UTF-8 a échoué."; }
-    update-locale LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8 || { state_set_status base_system_configuration failed; die "Impossible de définir la locale française."; }
-    localectl set-keymap us || { state_set_status base_system_configuration failed; die "Impossible de définir le clavier console anglais (us)."; }
+    unset LANGUAGE LC_ALL
+    update-locale --no-checks LANG=fr_FR.UTF-8 LANGUAGE=en_US:en LC_ALL \
+        || { state_set_status base_system_configuration failed; die "Impossible de définir la locale française."; }
     local keyboard_tmp
     keyboard_tmp=$(mktemp /etc/default/.keyboard.cotcod.XXXXXX)
     if [[ -f /etc/default/keyboard ]]; then
@@ -135,6 +174,9 @@ base_apply() {
     chmod 644 "$keyboard_tmp"
     chown root:root "$keyboard_tmp"
     mv -f -- "$keyboard_tmp" /etc/default/keyboard
+    if ! localectl set-keymap us; then
+        warn "localectl ne peut pas modifier le clavier actif dans cet environnement; /etc/default/keyboard est configuré pour us et sera utilisé par la configuration console au démarrage."
+    fi
     timedatectl set-timezone Europe/Paris || { state_set_status base_system_configuration failed; die "Impossible de définir le fuseau Europe/Paris."; }
     state_update '.steps.base_system_configuration = {status:"succeeded", hostname:$hostname, locale:"fr_FR.UTF-8", keyboard:"us", timezone:"Europe/Paris", configured_at:$now} | .report.system.hostname_requested=$hostname | .report.system.locale="fr_FR.UTF-8" | .report.system.keyboard="us" | .report.system.timezone="Europe/Paris"' \
         --arg hostname "$target_hostname"

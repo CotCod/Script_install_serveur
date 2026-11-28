@@ -33,9 +33,9 @@ parcours. S’il en manque, il regroupe leurs paquets APT et les installe avant
 de commencer, après une confirmation `[Y/n]` (Entrée accepte l’installation).
 Il choisit les paquets réseau selon la distribution détectée.
 
-Les autres actions système restent précédées de leurs confirmations propres.
-L’assistant ne redémarre jamais la machine de lui-même. Un accès console doit
-rester disponible pendant les changements réseau et SSH.
+Les confirmations des actions et des contrôles utilisent `[Y/n]` : Entrée ou
+`Y` accepte, `n` annule. L’assistant ne redémarre jamais la machine de lui-même.
+Un accès console doit rester disponible pendant les changements réseau et SSH.
 
 ## Parcours automatisé
 
@@ -44,7 +44,8 @@ Le parcours effectue, dans l’ordre :
 1. Détection de Debian/Ubuntu, version et architecture; collecte du client, du
    rôle, du hostname, de l’IPv4 principale et des comptes administrateurs.
 2. Inventaire puis mise à jour du système, installation des outils CotCod,
-   configuration du hostname, de la locale, du clavier et du fuseau horaire.
+   configuration du hostname, de la locale française (`LANG=fr_FR.UTF-8`,
+   `LANGUAGE=en_US:en`), du clavier et du fuseau horaire.
 3. Revue des services, contrôle du stockage et validation manuelle de
    `/etc/fstab`.
 4. Configuration réseau IPv4 statique avec retour arrière programmé, puis test

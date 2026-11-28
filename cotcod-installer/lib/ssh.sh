@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ssh_initial_configure() {
-    local session_id=$1 confirmation ssh_config effective
+    local session_id=$1 ssh_config effective
     state_require_confirmed preparation
     [[ "$(jq -r '.steps.base_installation.status // ""' "$STATE_FILE")" == succeeded ]] \
         || die "Terminez d'abord l'installation initiale."
@@ -11,8 +11,7 @@ ssh_initial_configure() {
         || die "La configuration SSH a déjà commencé; vérifiez l'état et les sauvegardes."
 
     printf 'Première étape SSH : root interdit, mais le mot de passe reste temporairement actif pour déployer et tester les clés.\n'
-    read -r -p "Tapez CONFIGURER-SSH pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == CONFIGURER-SSH ]] || die "Configuration SSH annulée."
+    confirm_yes_no "Installer OpenSSH et appliquer la configuration initiale ?" || die "Configuration SSH annulée."
 
     local backup_dir="$STATE_DIR/backups/$session_id"
     mkdir -p -- "$backup_dir"
@@ -62,7 +61,7 @@ EOF
 }
 
 ssh_harden() {
-    local session_id=$1 confirmation old_config new_config effective
+    local session_id=$1 old_config new_config effective
     state_require_confirmed preparation
     [[ "$(jq -r '.steps.ssh.initial_configuration // ""' "$STATE_FILE")" == succeeded ]] \
         || die "Appliquez d'abord la configuration SSH initiale."
@@ -73,8 +72,7 @@ ssh_harden() {
 
     printf 'Cette étape désactive uniquement l’authentification SSH par mot de passe. Le port ne change pas encore.\n'
     printf 'La session actuelle doit rester ouverte; testez ensuite une nouvelle connexion par clé.\n'
-    read -r -p "Tapez DESACTIVER-MOTDEPASSE-SSH pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == DESACTIVER-MOTDEPASSE-SSH ]] || die "Durcissement SSH annulé."
+    confirm_yes_no "Désactiver maintenant l’authentification SSH par mot de passe ?" || die "Durcissement SSH annulé."
 
     local backup_dir="$STATE_DIR/backups/$session_id"
     mkdir -p -- "$backup_dir"
@@ -102,7 +100,7 @@ ssh_harden() {
 }
 
 ssh_change_port() {
-    local session_id=$1 confirmation port old_config new_config effective backup_dir effective_port_count attempts
+    local session_id=$1 port old_config new_config effective backup_dir effective_port_count attempts
     state_require_confirmed preparation
     [[ "$(jq -r '.steps.ssh.hardening // ""' "$STATE_FILE")" == succeeded ]] \
         || die "Désactivez d'abord l'authentification par mot de passe."
@@ -123,8 +121,7 @@ ssh_change_port() {
     done
     ((attempts < 50)) || die "Aucun port libre n'a été trouvé dans la plage CotCod."
     printf 'Le port SSH va passer de 22 à %s/tcp. Gardez cette session ouverte et vérifiez l’accès console.\n' "$port"
-    read -r -p "Tapez CHANGER-PORT-SSH pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == CHANGER-PORT-SSH ]] || die "Changement de port annulé."
+    confirm_yes_no "Déplacer SSH vers le port $port maintenant ?" || die "Changement de port annulé."
     backup_dir="$STATE_DIR/backups/$session_id"
     mkdir -p -- "$backup_dir"
     chmod 700 -- "$STATE_DIR/backups" "$backup_dir"
@@ -158,7 +155,7 @@ ssh_change_port() {
 }
 
 mfa_configure() {
-    local session_id=$1 confirmation user auth_pam ssh_config existing_pam auth_effective mfa_state old_auth_pam old_ssh_config
+    local session_id=$1 user auth_pam ssh_config existing_pam auth_effective mfa_state old_auth_pam old_ssh_config
     local -a admins
     state_require_confirmed preparation
     [[ "$(jq -r '.steps.ssh.status // ""' "$STATE_FILE")" == succeeded ]] \
@@ -172,8 +169,7 @@ mfa_configure() {
     done
 
     printf 'Le secret TOTP et les codes de récupération seront présentés à chaque utilisateur et ne seront pas enregistrés par CotCod.\n'
-    read -r -p "Tapez CONFIGURER-MFA pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == CONFIGURER-MFA ]] || die "Configuration MFA annulée."
+    confirm_yes_no "Installer le module TOTP et enrôler les comptes administrateurs ?" || die "Configuration MFA annulée."
 
     local backup_dir="$STATE_DIR/backups/$session_id"
     mkdir -p -- "$backup_dir"

@@ -10,7 +10,7 @@ write_config_file() {
 }
 
 protection_configure() {
-    local session_id=$1 confirmation ssh_port sshd_config fail2ban_config sysctl_config ufw_status protection_step boot_id
+    local session_id=$1 ssh_port sshd_config fail2ban_config sysctl_config ufw_status protection_step boot_id
     local ssh_ports ssh_port_count
 
     state_require_confirmed preparation
@@ -42,8 +42,7 @@ protection_configure() {
 
     printf 'Cette étape configure UFW, Fail2Ban, sysctl et AppArmor.\n'
     printf 'Port SSH détecté : %s/tcp. Gardez la session SSH actuelle ouverte et vérifiez un accès de secours console.\n' "$ssh_port"
-    read -r -p "Tapez APPLIQUER-PROTECTIONS pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == APPLIQUER-PROTECTIONS ]] || die "Configuration des protections annulée."
+    confirm_yes_no "Appliquer UFW, Fail2Ban, sysctl et AppArmor maintenant ?" || die "Configuration des protections annulée."
 
     local backup_dir="$STATE_DIR/backups/$session_id"
     mkdir -p -- "$backup_dir"

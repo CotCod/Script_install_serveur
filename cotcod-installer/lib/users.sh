@@ -14,7 +14,7 @@ set_login_parameter() {
 }
 
 users_apply() {
-    local session_id=$1 confirmation user pwquality_line pam_tmp group_list created_at
+    local session_id=$1 user pwquality_line pam_tmp group_list created_at
     local first_name last_name first_norm last_norm base expected_id collision_count idx j
     local corrected_id admin_json name_json
     local -a admins display_names bases first_norms last_norms
@@ -84,7 +84,7 @@ users_apply() {
         done
     done
 
-    local existing_record existing_uid existing_home reuse_confirmation
+    local existing_record existing_uid existing_home
     for user in "${admins[@]}"; do
         if getent passwd "$user" >/dev/null; then
             existing_record=$(getent passwd "$user")
@@ -93,16 +93,13 @@ users_apply() {
             ((existing_uid >= 1000)) || die "Le compte $user est un compte système (UID $existing_uid); il ne peut pas être un administrateur nominatif."
             [[ "$existing_home" == "/home/$user" ]] || die "Le répertoire de $user est '$existing_home', attendu '/home/$user'; régularisez-le manuellement."
             [[ -d "$existing_home" ]] || die "Le répertoire personnel de $user est absent; régularisez-le manuellement."
-            read -r -p "Le compte $user existe déjà. Tapez REUTILISER-COMPTE après avoir vérifié son propriétaire : " reuse_confirmation \
-                || die "Lecture interrompue."
-            [[ "$reuse_confirmation" == REUTILISER-COMPTE ]] || die "Réutilisation du compte $user annulée."
+            confirm_yes_no "Le compte $user existe déjà. Après vérification de son propriétaire, le réutiliser ?" || die "Réutilisation du compte $user annulée."
         fi
     done
 
     printf 'Comptes administrateurs à contrôler/créer : %s\n' "${admins[*]}"
     printf 'Les mots de passe seront saisis directement par passwd et ne seront pas enregistrés.\n'
-    read -r -p "Tapez APPLIQUER-COMPTES pour continuer : " confirmation || die "Lecture interrompue."
-    [[ "$confirmation" == APPLIQUER-COMPTES ]] || die "Configuration des comptes annulée."
+    confirm_yes_no "Créer ou configurer ces comptes et appliquer la politique de mots de passe ?" || die "Configuration des comptes annulée."
     admin_json=$(printf '%s\n' "${admins[@]}" | jq -R . | jq -s .)
     name_json=$(printf '%s\n' "${display_names[@]}" | jq -R . | jq -s .)
     state_update '.preparation.authorized_admins = $admins | .report.users = {identities:[$admins|to_entries[]|{username:.value,display_name:$names[.key]}]}' \

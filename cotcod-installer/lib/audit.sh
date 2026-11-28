@@ -39,8 +39,12 @@ audit_final() {
     readable_total=$(numfmt --to=iec "$total_disk_bytes" 2>/dev/null || printf unknown)
 
     if [[ "$actual_hostname" != "$expected_hostname" ]]; then failures+=("Hostname constaté différent du hostname demandé"); fi
+    awk -v hostname="$expected_hostname" '$1 == "127.0.1.1" {for (i=2; i<=NF; i++) if ($i == hostname) found=1} END {exit !found}' /etc/hosts \
+        || failures+=("Hostname préparé absent de la résolution locale dans /etc/hosts")
     locale_file=$(cat /etc/default/locale 2>/dev/null || true)
     grep -Eq '^LANG="?fr_FR.UTF-8"?$' <<< "$locale_file" || failures+=("Locale par défaut différente de fr_FR.UTF-8")
+    grep -Eq '^LANGUAGE="?en_US:en"?$' <<< "$locale_file" || failures+=("Préférence LANGUAGE différente de en_US:en")
+    grep -Eq '^LC_ALL=' <<< "$locale_file" && failures+=("LC_ALL doit rester non défini pour que LANGUAGE soit pris en compte")
     locale -a 2>/dev/null | grep -Eiq '^fr_FR\.utf-?8$' || failures+=("Locale fr_FR.UTF-8 absente des locales générées")
     if [[ -r /etc/default/keyboard ]]; then
         grep -Eq '^XKBLAYOUT="?us"?$' /etc/default/keyboard || failures+=("Disposition clavier différente de us")
@@ -48,7 +52,6 @@ audit_final() {
         failures+=("Configuration clavier /etc/default/keyboard absente")
     fi
     keyboard_status=$(localectl status 2>&1 || true)
-    [[ "$keyboard_status" == *"VC Keymap: us"* ]] || failures+=("Disposition clavier console us non active")
     actual_address=$(ip -4 -o address show dev "$expected_iface" scope global 2>/dev/null | awk 'NR == 1 {print $4}')
     [[ "$actual_address" == "$expected_ip/$expected_prefix" ]] || failures+=("Adresse/préfixe IPv4 prévu absent de l'interface $expected_iface")
     default_route=$(ip -4 route show default 2>/dev/null || true)
@@ -262,7 +265,7 @@ EOF
         --arg ssh "$sshd_effective" --arg ssh_port "$ssh_port" \
         --arg firewall "$firewall_status" --arg ports "$ports" --arg fail2ban "$fail2ban_status" \
         --arg apparmor "$apparmor_status" --arg journal "$journal_summary" --arg findings "$findings"
-    state_update '.report.system.locale = "fr_FR.UTF-8" | .report.system.keyboard = "us" | .report.system.keyboard_status = $keyboard | .report.system.timezone = $timezone | .report.firewall.allowed_inbound_rules = $inbound_rules | .report.apparmor.errors = $apparmor_errors | .report.apparmor.kernel_module = $apparmor_kernel | .report.logging.critical_alerts = $critical' \
+    state_update '.report.system.locale = "fr_FR.UTF-8" | .report.system.language_preference = "en_US:en" | .report.system.keyboard = "us" | .report.system.keyboard_status = $keyboard | .report.system.timezone = $timezone | .report.firewall.allowed_inbound_rules = $inbound_rules | .report.apparmor.errors = $apparmor_errors | .report.apparmor.kernel_module = $apparmor_kernel | .report.logging.critical_alerts = $critical' \
         --arg timezone "$timezone" --arg inbound_rules "$inbound_rules" --arg apparmor_errors "$apparmor_errors" --arg keyboard "$keyboard_status" \
         --arg apparmor_kernel "$apparmor_kernel" --arg critical "$journal_critical"
 

@@ -29,7 +29,7 @@ network_inspect() {
 network_configure() {
     local session_id=$1 route interface detected_ip detected_prefix gateway ip prefix choice
     local os network_kind config_path archive backup_dir rollback_unit config_content current_ip netmask
-    local iface_match config_files iface_count network_state alternative_pkg confirmation
+    local iface_match config_files iface_count network_state alternative_pkg
     local -a alternative_ntp=()
     state_require_confirmed preparation
     [[ "$(jq -r '.steps.storage.status // ""' "$STATE_FILE")" == succeeded ]] \
@@ -41,9 +41,7 @@ network_configure() {
         rollback_unit="cotcod-net-rollback-${session_id}"
         systemctl is-active --quiet "$rollback_unit.timer" \
             && die "Le retour arrière réseau est encore programmé; attendez son exécution avant toute reprise."
-        read -r -p "Après vérification de la restauration réseau, tapez REINITIALISER-RESEAU : " choice \
-            || die "Lecture interrompue."
-        [[ "$choice" == REINITIALISER-RESEAU ]] || die "Reprise réseau annulée."
+        confirm_yes_no "La restauration réseau est vérifiée. Recommencer la configuration ?" || die "Reprise réseau annulée."
         state_update '.steps.network.configuration = "not_started" | .steps.network.audit_status = "stale"'
         network_state=not_started
     fi
@@ -160,8 +158,7 @@ EOF
 
     printf 'Configuration prévue : %s, %s/%s, passerelle %s, DNS 1.1.1.1 et 1.0.0.1.\n' "$interface" "$ip" "$prefix" "$gateway"
     printf 'Un retour arrière automatique sera programmé dans quinze minutes. Confirmez uniquement si vous pouvez tester une nouvelle connexion.\n'
-    read -r -p "Tapez APPLIQUER-RESEAU pour continuer : " choice || die "Lecture interrompue."
-    [[ "$choice" == APPLIQUER-RESEAU ]] || die "Configuration réseau annulée."
+    confirm_yes_no "Appliquer cette configuration réseau avec retour arrière automatique ?" || die "Configuration réseau annulée."
 
     for alternative_pkg in chrony ntp ntpsec openntpd; do
         [[ "$(dpkg-query -W -f='${db:Status-Status}' "$alternative_pkg" 2>/dev/null || true)" == installed ]] \
@@ -169,9 +166,7 @@ EOF
     done
     if ((${#alternative_ntp[@]})); then
         printf 'Le protocole impose systemd-timesyncd. Les services horaires alternatifs suivants sont installés : %s\n' "${alternative_ntp[*]}"
-        read -r -p "Leurs configurations seront sauvegardées puis les paquets purgés. Tapez RETIRER-NTP-ALTERNATIF : " confirmation \
-            || die "Lecture interrompue."
-        [[ "$confirmation" == RETIRER-NTP-ALTERNATIF ]] || die "Retrait des services horaires alternatifs annulé."
+        confirm_yes_no "Sauvegarder les configurations puis purger ces services horaires alternatifs ?" || die "Retrait des services horaires alternatifs annulé."
         backup_dir="$STATE_DIR/backups/$session_id"
         mkdir -p -- "$backup_dir"
         chmod 700 -- "$STATE_DIR/backups" "$backup_dir"
@@ -231,8 +226,8 @@ EOF
         die "La nouvelle adresse ou la route n'est pas active; le retour arrière reste programmé."
     fi
     printf 'L’adresse et la route sont actives. Testez maintenant depuis le poste technicien la connexion SSH et l’accès à Internet.\n'
-    read -r -p "Tapez GARDER-RESEAU uniquement si les tests externes réussissent : " choice || die "Lecture interrompue; le retour arrière reste programmé."
-    [[ "$choice" == GARDER-RESEAU ]] || die "Réseau non validé; le retour arrière reste programmé."
+    confirm_yes_no "Les tests externes réussissent-ils ? Conserver cette configuration réseau ?" \
+        || die "Réseau non validé; le retour arrière reste programmé."
     if ! ip -4 -o address show dev "$interface" | awk -v ip="$ip" -v prefix="$prefix" '$4 == ip "/" prefix {found=1} END {exit !found}' \
         || ! ip -4 route show default | grep -Fq "via $gateway"; then
         die "La configuration a été annulée pendant le test; le retour arrière reste programmé."
